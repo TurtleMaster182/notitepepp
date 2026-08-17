@@ -82,52 +82,101 @@ if (document.getElementById('board-container')) {
 
     const notesRef = ref(db, 'whiteboard_data/' + boardId);
 
+    // Local DOM cache and debounce timers to avoid re-rendering on every keystroke
+    const noteElements = {};
+    const updateTimers = {};
+    const DEBOUNCE_MS = 600;
+
     // Auto-sync notes across all users in real-time
     onValue(notesRef, (snapshot) => {
         const data = snapshot.val() || {};
         renderNotes(data);
+    }, (error) => {
+        console.error('onValue notesRef error:', error);
     });
+
+    function createNoteElement(noteId, note) {
+        const noteEl = document.createElement('div');
+        noteEl.className = 'note' + (note.type === 'image' ? ' image-note' : '');
+
+        // Delete Button
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.innerText = '✕';
+        delBtn.onclick = () => {
+            remove(ref(db, `whiteboard_data/${boardId}/${noteId}`));
+        };
+        noteEl.appendChild(delBtn);
+
+        if (note.type === 'text') {
+            const textarea = document.createElement('textarea');
+            textarea.value = note.content || '';
+            textarea.placeholder = "Write something here...";
+
+            // Debounced update to the database
+            textarea.addEventListener('input', (e) => {
+                if (updateTimers[noteId]) clearTimeout(updateTimers[noteId]);
+                updateTimers[noteId] = setTimeout(() => {
+                    update(ref(db, `whiteboard_data/${boardId}/${noteId}`), { content: textarea.value }).catch(err => console.error('update note error', err));
+                    delete updateTimers[noteId];
+                }, DEBOUNCE_MS);
+            });
+
+            // Flush pending update on blur
+            textarea.addEventListener('blur', () => {
+                if (updateTimers[noteId]) {
+                    clearTimeout(updateTimers[noteId]);
+                    update(ref(db, `whiteboard_data/${boardId}/${noteId}`), { content: textarea.value }).catch(err => console.error('update note error', err));
+                    delete updateTimers[noteId];
+                }
+            });
+
+            noteEl.appendChild(textarea);
+            noteElements[noteId] = { el: noteEl, textarea };
+        } else if (note.type === 'image') {
+            const img = document.createElement('img');
+            img.src = note.content;
+            noteEl.appendChild(img);
+            noteElements[noteId] = { el: noteEl };
+        }
+
+        return noteEl;
+    }
 
     function renderNotes(notesObject) {
         const container = document.getElementById('board-container');
-        container.innerHTML = ''; 
 
+        // Add or update notes without wiping the whole container (preserve focus)
         for (const noteId in notesObject) {
             const note = notesObject[noteId];
-            
-            const noteEl = document.createElement('div');
-            noteEl.className = 'note' + (note.type === 'image' ? ' image-note' : '');
-            
-            // Delete Button
-            const delBtn = document.createElement('button');
-            delBtn.className = 'delete-btn';
-            delBtn.innerText = '✕';
-            delBtn.onclick = () => {
-                remove(ref(db, `whiteboard_data/${boardId}/${noteId}`));
-            };
-            noteEl.appendChild(delBtn);
 
-            // Text Notes
-            if (note.type === 'text') {
-                const textarea = document.createElement('textarea');
-                textarea.value = note.content;
-                textarea.placeholder = "Write something here...";
-                
-                textarea.oninput = (e) => {
-                    update(ref(db, `whiteboard_data/${boardId}/${noteId}`), {
-                        content: e.target.value
-                    });
-                };
-                noteEl.appendChild(textarea);
-            } 
-            // Image Notes
-            else if (note.type === 'image') {
-                const img = document.createElement('img');
-                img.src = note.content;
-                noteEl.appendChild(img);
+            if (noteElements[noteId]) {
+                const entry = noteElements[noteId];
+                if (note.type === 'text' && entry.textarea) {
+                    // Update only if not focused by the user
+                    if (document.activeElement !== entry.textarea && entry.textarea.value !== (note.content || '')) {
+                        entry.textarea.value = note.content || '';
+                    }
+                } else if (note.type === 'image' && entry.el) {
+                    const img = entry.el.querySelector('img');
+                    if (img && img.src !== note.content) img.src = note.content;
+                }
+            } else {
+                const newEl = createNoteElement(noteId, note);
+                container.appendChild(newEl);
             }
-            
-            container.appendChild(noteEl);
+        }
+
+        // Remove elements that no longer exist
+        for (const existingId in Object.assign({}, noteElements)) {
+            if (!notesObject.hasOwnProperty(existingId)) {
+                const entry = noteElements[existingId];
+                if (entry) {
+                    if (updateTimers[existingId]) { clearTimeout(updateTimers[existingId]); delete updateTimers[existingId]; }
+                    if (entry.el && entry.el.parentNode) entry.el.parentNode.removeChild(entry.el);
+                    delete noteElements[existingId];
+                }
+            }
         }
     }
 
