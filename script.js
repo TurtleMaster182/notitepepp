@@ -153,9 +153,21 @@ if (document.getElementById('board-container')) {
             if (noteElements[noteId]) {
                 const entry = noteElements[noteId];
                 if (note.type === 'text' && entry.textarea) {
-                    // Update only if not focused by the user
-                    if (document.activeElement !== entry.textarea && entry.textarea.value !== (note.content || '')) {
-                        entry.textarea.value = note.content || '';
+                    const textarea = entry.textarea;
+                    const newVal = note.content || '';
+                    if (textarea.value !== newVal) {
+                        const isFocused = document.activeElement === textarea;
+                        let start = 0, end = 0;
+                        if (isFocused) {
+                            try { start = textarea.selectionStart; end = textarea.selectionEnd; } catch (e) { start = 0; end = 0; }
+                        }
+                        textarea.value = newVal;
+                        if (isFocused) {
+                            const len = textarea.value.length;
+                            start = Math.min(start, len);
+                            end = Math.min(end, len);
+                            try { textarea.setSelectionRange(start, end); textarea.focus(); } catch (e) { /* ignore */ }
+                        }
                     }
                 } else if (note.type === 'image' && entry.el) {
                     const img = entry.el.querySelector('img');
