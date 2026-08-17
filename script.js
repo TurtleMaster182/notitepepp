@@ -9,6 +9,7 @@ import { getDatabase, ref, set, onValue, update, remove } from "https://www.gsta
 const firebaseConfig = {
   apiKey: "AIzaSyBrg6Vx6KIcmI62J9NGrqmQLLVBs82ZMxQ",
   authDomain: "notepepp.firebaseapp.com",
+  databaseURL: "https://notepepp-default-rtdb.firebaseio.com",
   projectId: "notepepp",
   storageBucket: "notepepp.firebasestorage.app",
   messagingSenderId: "369261230180",
