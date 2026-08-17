@@ -165,6 +165,28 @@ if (document.getElementById('board-container')) {
     const COLOR_LIGHT = 78; // percent (slightly darker)
     const colorUpdateTimers = {};
 
+    // Helpers: HSL <-> HEX
+    function hslToRgb(h, s, l){
+        s /= 100; l /= 100;
+        const k = n => (n + h/30) % 12;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+        return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
+    }
+    function rgbToHex(r,g,b){ return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+    function hslToHex(h,s,l){ const [r,g,b]=hslToRgb(h,s,l); return rgbToHex(r,g,b); }
+
+    function hexToRgb(hex){
+        hex = hex.replace('#',''); if (hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+        const num = parseInt(hex,16); return [(num>>16)&255, (num>>8)&255, num&255];
+    }
+    function rgbToHsl(r,g,b){
+        r/=255; g/=255; b/=255; const max=Math.max(r,g,b), min=Math.min(r,g,b); let h=0, s=0, l=(max+min)/2;
+        if(max!==min){ const d=max-min; s = l>0.5? d/(2-max-min) : d/(max+min); switch(max){case r: h=(g-b)/d + (g<b?6:0); break; case g: h=(b-r)/d + 2; break; case b: h=(r-g)/d +4; break;} h*=60; }
+        return [Math.round(h), Math.round(s*100), Math.round(l*100)];
+    }
+    function hexToHsl(hex){ const [r,g,b]=hexToRgb(hex); return rgbToHsl(r,g,b); }
+
     function openColorPicker(x, y, noteId) {
         if (!colorPicker) {
             colorPicker = document.createElement('div');
@@ -184,27 +206,54 @@ if (document.getElementById('board-container')) {
             const preview = document.createElement('div');
             preview.style.width = '28px'; preview.style.height = '28px'; preview.style.display = 'inline-block'; preview.style.marginLeft = '8px'; preview.style.verticalAlign = 'middle'; preview.style.borderRadius = '4px';
 
+            const hexInput = document.createElement('input');
+            hexInput.type = 'text'; hexInput.value = ''; hexInput.placeholder = '#rrggbb';
+            hexInput.style.marginLeft = '8px'; hexInput.style.width = '84px';
+
             const closeBtn = document.createElement('button');
             closeBtn.textContent = 'Close';
             closeBtn.style.marginLeft = '8px';
 
             colorPicker.appendChild(hueRange);
             colorPicker.appendChild(preview);
+            colorPicker.appendChild(hexInput);
             colorPicker.appendChild(closeBtn);
 
-            // handle changes
+            // handle hue changes
             hueRange.addEventListener('input', () => {
                 const h = parseInt(hueRange.value,10);
-                const col = `hsl(${h}, ${COLOR_SAT}%, ${COLOR_LIGHT}%)`;
-                preview.style.background = col;
+                const colHsl = `hsl(${h}, ${COLOR_SAT}%, ${COLOR_LIGHT}%)`;
+                const colHex = hslToHex(h, COLOR_SAT, COLOR_LIGHT);
+                preview.style.background = colHsl;
+                hexInput.value = colHex;
                 // debounce firebase update
                 if (colorUpdateTimers[noteId]) clearTimeout(colorUpdateTimers[noteId]);
                 colorUpdateTimers[noteId] = setTimeout(() => {
-                    update(ref(db, `whiteboard_data/${boardId}/${noteId}`), { color: col }).catch(err => console.error('color update error', err));
+                    update(ref(db, `whiteboard_data/${boardId}/${noteId}`), { color: colHsl }).catch(err => console.error('color update error', err));
                     delete colorUpdateTimers[noteId];
                 }, 200);
-                // apply immediately in DOM for responsiveness
-                const entry = noteElements[noteId]; if (entry && entry.el) entry.el.style.backgroundColor = col;
+                const entry = noteElements[noteId]; if (entry && entry.el) entry.el.style.backgroundColor = colHsl;
+            });
+
+            // handle hex input (debounced)
+            let hexTimer = null;
+            hexInput.addEventListener('input', () => {
+                const v = hexInput.value.trim();
+                if (hexTimer) clearTimeout(hexTimer);
+                hexTimer = setTimeout(() => {
+                    try {
+                        // normalize
+                        const hex = v.startsWith('#')? v : '#'+v;
+                        const [h,s,l] = hexToHsl(hex);
+                        // keep saturation/lightness consistent with palette
+                        const colHsl = `hsl(${h}, ${COLOR_SAT}%, ${COLOR_LIGHT}%)`;
+                        preview.style.background = colHsl;
+                        hueRange.value = h;
+                        // persist
+                        update(ref(db, `whiteboard_data/${boardId}/${noteId}`), { color: colHsl }).catch(err => console.error('color update error', err));
+                        const entry = noteElements[noteId]; if (entry && entry.el) entry.el.style.backgroundColor = colHsl;
+                    } catch (e) { /* invalid hex - ignore */ }
+                }, 300);
             });
 
             closeBtn.addEventListener('click', () => { if (colorPicker && colorPicker.parentNode) colorPicker.parentNode.removeChild(colorPicker); colorPicker = null; });
@@ -220,16 +269,22 @@ if (document.getElementById('board-container')) {
         colorPicker.style.left = `${x}px`;
         colorPicker.style.top = `${y}px`;
 
-        // set initial hue from note
+        // set initial hue & hex from note
         const note = noteElements[noteId] && noteElements[noteId].el ? noteElements[noteId] : null;
         let startHue = 50;
+        let startHex = '';
         if (note && note.el && note.el.style.backgroundColor) {
             const m = /hsl\((\d+),\s*(\d+)%.*,\s*(\d+)%\)/.exec(note.el.style.backgroundColor);
             if (m) startHue = parseInt(m[1],10);
+            try { const [h,s,l] = hexToHsl(startHex = rgbToHex.apply(null, note.el.style.backgroundColor ? hslToRgb(startHue, COLOR_SAT, COLOR_LIGHT) : [255,255,255])); startHex = hslToHex(startHue, COLOR_SAT, COLOR_LIGHT); } catch(e) { startHex = hslToHex(startHue, COLOR_SAT, COLOR_LIGHT); }
         }
         const hueInput = colorPicker.querySelector('input[type="range"]');
         const preview = colorPicker.querySelector('div');
-        hueInput.value = startHue; preview.style.background = `hsl(${startHue}, ${COLOR_SAT}%, ${COLOR_LIGHT}%)`;
+        const hexInput = colorPicker.querySelector('input[type="text"]');
+        hueInput.value = startHue;
+        const initHsl = `hsl(${startHue}, ${COLOR_SAT}%, ${COLOR_LIGHT}%)`;
+        preview.style.background = initHsl;
+        hexInput.value = hslToHex(startHue, COLOR_SAT, COLOR_LIGHT);
 
         document.body.appendChild(colorPicker);
     }
