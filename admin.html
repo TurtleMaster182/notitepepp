@@ -49,7 +49,25 @@ Type 'help' for a list of available commands.
         <input type="text" id="cli-input" autofocus autocomplete="off" spellcheck="false">
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getDatabase, ref, onValue, remove } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+        // Firebase config (same as main app)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBrg6Vx6KIcmI62J9NGrqmQLLVBs82ZMxQ",
+            authDomain: "notepepp.firebaseapp.com",
+            databaseURL: "https://notepepp-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "notepepp",
+            storageBucket: "notepepp.firebasestorage.app",
+            messagingSenderId: "369261230180",
+            appId: "1:369261230180:web:1ca3366b2d62c4e8578771",
+            measurementId: "G-16S87HQR8Q"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
         const input = document.getElementById('cli-input');
         const output = document.getElementById('output');
 
@@ -57,6 +75,17 @@ Type 'help' for a list of available commands.
         function print(text) {
             output.innerText += '\n' + text;
         }
+
+        // Keep an in-memory copy of boards fetched from Firebase
+        let boards = [];
+        const boardsRef = ref(db, 'whiteboard_list');
+        onValue(boardsRef, (snapshot) => {
+            const data = snapshot.val() || {};
+            boards = Object.values(data);
+            console.log('admin: loaded boards', boards);
+        }, (err) => {
+            console.error('admin: error loading boards', err);
+        });
 
         // Listen for the Enter key
         input.addEventListener('keydown', function(e) {
@@ -73,9 +102,6 @@ Type 'help' for a list of available commands.
         function processCommand(cmdStr) {
             const args = cmdStr.split(' ').filter(arg => arg !== '');
             const cmd = args[0] ? args[0].toLowerCase() : '';
-
-            // Load the current boards from memory
-            let boards = JSON.parse(localStorage.getItem('whiteboard_list')) || [];
 
             switch (cmd) {
                 case 'help':
@@ -94,33 +120,32 @@ Type 'help' for a list of available commands.
                     print('ID                     NAME');
                     print('-----------------------------------------');
                     boards.forEach(b => {
-                        // Pad the ID with spaces so the names align nicely in the terminal
-                        const paddedId = b.id.padEnd(20, ' ');
-                        print(`${paddedId}   ${b.name}`);
+                        const paddedId = (b.id || '').padEnd(20, ' ');
+                        print(`${paddedId}   ${b.name || ''}`);
                     });
                     break;
 
                 case 'rm':
-                    const targetId = args[1];
-                    if (!targetId) {
-                        print('ERROR: Missing argument. Usage: rm [board_id]');
-                        return;
-                    }
+                    {
+                        const targetId = args[1];
+                        if (!targetId) {
+                            print('ERROR: Missing argument. Usage: rm [board_id]');
+                            return;
+                        }
 
-                    const boardIndex = boards.findIndex(b => b.id === targetId);
-                    
-                    if (boardIndex !== -1) {
-                        const boardName = boards[boardIndex].name;
-                        // 1. Remove from the list
-                        boards.splice(boardIndex, 1);
-                        localStorage.setItem('whiteboard_list', JSON.stringify(boards));
-                        
-                        // 2. Erase the sticky notes/images from memory
-                        localStorage.removeItem('whiteboard_data_' + targetId);
-                        
-                        print(`SUCCESS: Whiteboard '${boardName}' (${targetId}) has been purged.`);
-                    } else {
-                        print(`ERROR: Board ID '${targetId}' does not exist. Use 'ls' to view IDs.`);
+                        const found = boards.find(b => b.id === targetId);
+                        if (!found) {
+                            print(`ERROR: Board ID '${targetId}' does not exist. Use 'ls' to view IDs.`);
+                            return;
+                        }
+
+                        const boardName = found.name || targetId;
+
+                        // Remove board entry and its data from Firebase
+                        remove(ref(db, `whiteboard_list/${targetId}`))
+                            .then(() => remove(ref(db, `whiteboard_data/${targetId}`)))
+                            .then(() => print(`SUCCESS: Whiteboard '${boardName}' (${targetId}) has been purged.`))
+                            .catch(err => print(`ERROR: Failed to remove board: ${err.message || err}`));
                     }
                     break;
 
