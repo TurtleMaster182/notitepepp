@@ -140,7 +140,98 @@ if (document.getElementById('board-container')) {
             noteElements[noteId] = { el: noteEl };
         }
 
+        // Apply color if present (or default pastel)
+        try {
+            const defaultHue = 50; // yellowish default
+            const SAT = 60; // saturation for pastel
+            const LIGHT = 85; // lightness for pastel
+            const color = note.color || `hsl(${defaultHue}, ${SAT}%, ${LIGHT}%)`;
+            noteEl.style.backgroundColor = color;
+        } catch (e) { /* ignore */ }
+
+        // Context menu for changing color by hue
+        noteEl.addEventListener('contextmenu', (ev) => {
+            ev.preventDefault();
+            openColorPicker(ev.pageX, ev.pageY, noteId);
+            return false;
+        });
+
         return noteEl;
+    }
+
+    // Color picker UI (single floating instance)
+    let colorPicker = null;
+    const COLOR_SAT = 60; // percent
+    const COLOR_LIGHT = 85; // percent
+    const colorUpdateTimers = {};
+
+    function openColorPicker(x, y, noteId) {
+        if (!colorPicker) {
+            colorPicker = document.createElement('div');
+            colorPicker.style.position = 'absolute';
+            colorPicker.style.padding = '8px';
+            colorPicker.style.background = '#fff';
+            colorPicker.style.border = '1px solid #ccc';
+            colorPicker.style.borderRadius = '6px';
+            colorPicker.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            colorPicker.style.zIndex = 9999;
+
+            const hueRange = document.createElement('input');
+            hueRange.type = 'range';
+            hueRange.min = 0; hueRange.max = 360; hueRange.value = 50;
+            hueRange.style.width = '160px';
+
+            const preview = document.createElement('div');
+            preview.style.width = '28px'; preview.style.height = '28px'; preview.style.display = 'inline-block'; preview.style.marginLeft = '8px'; preview.style.verticalAlign = 'middle'; preview.style.borderRadius = '4px';
+
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = 'Close';
+            closeBtn.style.marginLeft = '8px';
+
+            colorPicker.appendChild(hueRange);
+            colorPicker.appendChild(preview);
+            colorPicker.appendChild(closeBtn);
+
+            // handle changes
+            hueRange.addEventListener('input', () => {
+                const h = parseInt(hueRange.value,10);
+                const col = `hsl(${h}, ${COLOR_SAT}%, ${COLOR_LIGHT}%)`;
+                preview.style.background = col;
+                // debounce firebase update
+                if (colorUpdateTimers[noteId]) clearTimeout(colorUpdateTimers[noteId]);
+                colorUpdateTimers[noteId] = setTimeout(() => {
+                    update(ref(db, `whiteboard_data/${boardId}/${noteId}`), { color: col }).catch(err => console.error('color update error', err));
+                    delete colorUpdateTimers[noteId];
+                }, 200);
+                // apply immediately in DOM for responsiveness
+                const entry = noteElements[noteId]; if (entry && entry.el) entry.el.style.backgroundColor = col;
+            });
+
+            closeBtn.addEventListener('click', () => { if (colorPicker && colorPicker.parentNode) colorPicker.parentNode.removeChild(colorPicker); colorPicker = null; });
+
+            // clicking outside closes
+            document.addEventListener('click', function onDocClick(ev) {
+                if (!colorPicker) return;
+                if (!colorPicker.contains(ev.target)) { if (colorPicker.parentNode) colorPicker.parentNode.removeChild(colorPicker); colorPicker=null; document.removeEventListener('click', onDocClick); }
+            });
+        }
+
+        // position
+        colorPicker.style.left = `${x}px`;
+        colorPicker.style.top = `${y}px`;
+
+        // set initial hue from note
+        const note = noteElements[noteId] && noteElements[noteId].el ? noteElements[noteId] : null;
+        let startHue = 50;
+        if (note && note.el && note.el.style.backgroundColor) {
+            const m = /hsl\((\d+),\s*(\d+)%.*,\s*(\d+)%\)/.exec(note.el.style.backgroundColor);
+            if (m) startHue = parseInt(m[1],10);
+        }
+        const hueInput = colorPicker.querySelector('input[type="range"]');
+        const preview = colorPicker.querySelector('div');
+        hueInput.value = startHue; preview.style.background = `hsl(${startHue}, ${COLOR_SAT}%, ${COLOR_LIGHT}%)`;
+
+        document.body.appendChild(colorPicker);
     }
 
     function renderNotes(notesObject) {
@@ -173,6 +264,11 @@ if (document.getElementById('board-container')) {
                     const img = entry.el.querySelector('img');
                     if (img && img.src !== note.content) img.src = note.content;
                 }
+
+                // Update color if changed remotely
+                if (note.color && entry.el && entry.el.style.backgroundColor !== note.color) {
+                    entry.el.style.backgroundColor = note.color;
+                }
             } else {
                 const newEl = createNoteElement(noteId, note);
                 container.appendChild(newEl);
@@ -195,10 +291,12 @@ if (document.getElementById('board-container')) {
     // Add empty text note
     document.getElementById('add-text-btn').addEventListener('click', () => {
         const noteId = 'note_' + Date.now();
+        const defaultColor = `hsl(50, 60%, 85%)`;
         set(ref(db, `whiteboard_data/${boardId}/${noteId}`), { 
             id: noteId, 
             type: 'text', 
-            content: '' 
+            content: '',
+            color: defaultColor
         });
     });
 
@@ -209,10 +307,12 @@ if (document.getElementById('board-container')) {
             const reader = new FileReader();
             reader.onload = function(event) {
                 const noteId = 'note_' + Date.now();
+                const defaultColor = `hsl(50, 60%, 85%)`;
                 set(ref(db, `whiteboard_data/${boardId}/${noteId}`), { 
                     id: noteId, 
                     type: 'image', 
-                    content: event.target.result 
+                    content: event.target.result,
+                    color: defaultColor
                 });
             };
             reader.readAsDataURL(file);
