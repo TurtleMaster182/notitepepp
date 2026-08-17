@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whiteboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="board-body">
+    <header class="board-header">
+        <div class="header-left">
+            <a href="index.html" class="back-btn">← Back to Hub</a>
+            <h1 id="board-title">Whiteboard</h1>
+        </div>
+        <div class="controls">
+            <button id="add-text-btn" class="btn text-btn">+ Add Note</button>
+            <label class="btn photo-btn">
+                + Add Photo
+                <!-- Hidden file input triggered by clicking the label -->
+                <input type="file" id="add-photo-input" accept="image/*" hidden>
+            </label>
+        </div>
+    </header>
+
+    <!-- Where the tiling sticky notes will appear -->
+    <main id="board-container" class="tiling-container"></main>
+
+    <script src="script.js"></script>
+</body>
+</html>

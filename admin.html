@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System CLI</title>
+    <style>
+        body {
+            background-color: #0c0c0c;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            margin: 0;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        #output {
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .input-line {
+            display: flex;
+            align-items: center;
+        }
+        .prompt {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        input {
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 16px;
+            flex-grow: 1;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="output">Whiteboard System Admin CLI v1.0
+Type 'help' for a list of available commands.
+</div>
+    <div class="input-line">
+        <span class="prompt">admin@root:~$</span>
+        <input type="text" id="cli-input" autofocus autocomplete="off" spellcheck="false">
+    </div>
+
+    <script>
+        const input = document.getElementById('cli-input');
+        const output = document.getElementById('output');
+
+        // Helper to print text to the terminal
+        function print(text) {
+            output.innerText += '\n' + text;
+        }
+
+        // Listen for the Enter key
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const command = this.value.trim();
+                print('admin@root:~$ ' + command); // Echo the command
+                this.value = ''; // Clear input
+                processCommand(command);
+                window.scrollTo(0, document.body.scrollHeight); // Auto-scroll down
+            }
+        });
+
+        // Command logic
+        function processCommand(cmdStr) {
+            const args = cmdStr.split(' ').filter(arg => arg !== '');
+            const cmd = args[0] ? args[0].toLowerCase() : '';
+
+            // Load the current boards from memory
+            let boards = JSON.parse(localStorage.getItem('whiteboard_list')) || [];
+
+            switch (cmd) {
+                case 'help':
+                    print('AVAILABLE COMMANDS:');
+                    print('  ls             List all active whiteboards');
+                    print('  rm [board_id]  Delete a whiteboard and its data');
+                    print('  clear          Clear the terminal screen');
+                    print('  exit           Return to the hub');
+                    break;
+
+                case 'ls':
+                    if (boards.length === 0) {
+                        print('No whiteboards found in database.');
+                        return;
+                    }
+                    print('ID                     NAME');
+                    print('-----------------------------------------');
+                    boards.forEach(b => {
+                        // Pad the ID with spaces so the names align nicely in the terminal
+                        const paddedId = b.id.padEnd(20, ' ');
+                        print(`${paddedId}   ${b.name}`);
+                    });
+                    break;
+
+                case 'rm':
+                    const targetId = args[1];
+                    if (!targetId) {
+                        print('ERROR: Missing argument. Usage: rm [board_id]');
+                        return;
+                    }
+
+                    const boardIndex = boards.findIndex(b => b.id === targetId);
+                    
+                    if (boardIndex !== -1) {
+                        const boardName = boards[boardIndex].name;
+                        // 1. Remove from the list
+                        boards.splice(boardIndex, 1);
+                        localStorage.setItem('whiteboard_list', JSON.stringify(boards));
+                        
+                        // 2. Erase the sticky notes/images from memory
+                        localStorage.removeItem('whiteboard_data_' + targetId);
+                        
+                        print(`SUCCESS: Whiteboard '${boardName}' (${targetId}) has been purged.`);
+                    } else {
+                        print(`ERROR: Board ID '${targetId}' does not exist. Use 'ls' to view IDs.`);
+                    }
+                    break;
+
+                case 'clear':
+                    output.innerText = "Whiteboard System Admin CLI v1.0\nType 'help' for a list of available commands.";
+                    break;
+
+                case 'exit':
+                    window.location.href = 'index.html';
+                    break;
+
+                case '':
+                    // Do nothing on empty enter
+                    break;
+
+                default:
+                    print(`Command not found: ${cmd}`);
+            }
+        }
+
+        // Keep focus on the input box if the user clicks anywhere on the background
+        document.body.addEventListener('click', () => {
+            input.focus();
+        });
+    </script>
+</body>
+</html>
