@@ -9,6 +9,7 @@ import { getDatabase, ref, set, onValue, update, remove } from "https://www.gsta
 const firebaseConfig = {
   apiKey: "AIzaSyBrg6Vx6KIcmI62J9NGrqmQLLVBs82ZMxQ",
   authDomain: "notepepp.firebaseapp.com",
+  databaseURL: "https://notepepp-default-rtdb.firebaseio.com",
   projectId: "notepepp",
   storageBucket: "notepepp.firebasestorage.app",
   messagingSenderId: "369261230180",
@@ -28,11 +29,16 @@ if (document.getElementById('board-grid')) {
     // Auto-sync boards across all users
     onValue(boardsRef, (snapshot) => {
         const data = snapshot.val() || {};
+        console.log('onValue whiteboard_list snapshot:', data);
         const boards = Object.values(data);
+        console.log('parsed boards:', boards);
         renderBoards(boards);
+    }, (error) => {
+        console.error('onValue whiteboard_list error:', error);
     });
 
     function renderBoards(boards) {
+        console.log('renderBoards called with', boards);
         const grid = document.getElementById('board-grid');
         grid.innerHTML = ''; 
 
