@@ -1,3 +1,25 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBrg6Vx6KIcmI62J9NGrqmQLLVBs82ZMxQ",
+  authDomain: "notepepp.firebaseapp.com",
+  projectId: "notepepp",
+  storageBucket: "notepepp.firebasestorage.app",
+  messagingSenderId: "369261230180",
+  appId: "1:369261230180:web:1ca3366b2d62c4e8578771",
+  measurementId: "G-16S87HQR8Q"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
 // ==========================================
 // 1. HUB PAGE LOGIC (index.html)
 // ==========================================
