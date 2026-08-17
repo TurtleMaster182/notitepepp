@@ -28,11 +28,16 @@ if (document.getElementById('board-grid')) {
     // Auto-sync boards across all users
     onValue(boardsRef, (snapshot) => {
         const data = snapshot.val() || {};
+        console.log('onValue whiteboard_list snapshot:', data);
         const boards = Object.values(data);
+        console.log('parsed boards:', boards);
         renderBoards(boards);
+    }, (error) => {
+        console.error('onValue whiteboard_list error:', error);
     });
 
     function renderBoards(boards) {
+        console.log('renderBoards called with', boards);
         const grid = document.getElementById('board-grid');
         grid.innerHTML = ''; 
 
