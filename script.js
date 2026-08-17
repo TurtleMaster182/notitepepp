@@ -161,8 +161,8 @@ if (document.getElementById('board-container')) {
 
     // Color picker UI (single floating instance)
     let colorPicker = null;
-    const COLOR_SAT = 60; // percent
-    const COLOR_LIGHT = 85; // percent
+    const COLOR_SAT = 72; // percent (less washed)
+    const COLOR_LIGHT = 78; // percent (slightly darker)
     const colorUpdateTimers = {};
 
     function openColorPicker(x, y, noteId) {
@@ -291,7 +291,7 @@ if (document.getElementById('board-container')) {
     // Add empty text note
     document.getElementById('add-text-btn').addEventListener('click', () => {
         const noteId = 'note_' + Date.now();
-        const defaultColor = `hsl(50, 60%, 85%)`;
+        const defaultColor = `hsl(50, 72%, 78%)`;
         set(ref(db, `whiteboard_data/${boardId}/${noteId}`), { 
             id: noteId, 
             type: 'text', 
@@ -307,7 +307,7 @@ if (document.getElementById('board-container')) {
             const reader = new FileReader();
             reader.onload = function(event) {
                 const noteId = 'note_' + Date.now();
-                const defaultColor = `hsl(50, 60%, 85%)`;
+                const defaultColor = `hsl(50, 72%, 78%)`;
                 set(ref(db, `whiteboard_data/${boardId}/${noteId}`), { 
                     id: noteId, 
                     type: 'image', 
