@@ -157,3 +157,68 @@ body { background-color: var(--bg-color); color: var(--text-color); }
 }
 
 .note:hover .delete-btn { opacity: 1; }
+/* ==========================================
+   MOBILE RESPONSIVENESS (Phones & Small Tablets)
+   ========================================== */
+@media (max-width: 600px) {
+    /* --- Hub Page Mobile Styles --- */
+    .hub-header {
+        padding: 25px 15px;
+    }
+
+    .board-grid {
+        /* Reduce side padding and stack the boxes into a single column */
+        padding: 15px;
+        grid-template-columns: 1fr; 
+        gap: 15px;
+    }
+
+    .board-box-container {
+        height: 120px; /* Make boxes slightly shorter to save screen space */
+    }
+
+    /* --- Whiteboard Mobile Styles --- */
+    .board-header {
+        /* Stack the header text and the buttons vertically */
+        flex-direction: column;
+        padding: 15px;
+        gap: 15px;
+    }
+
+    .header-left {
+        width: 100%;
+        justify-content: center;
+        position: relative;
+    }
+
+    .back-btn {
+        position: absolute;
+        left: 0;
+        font-size: 14px; /* Slightly smaller text */
+    }
+
+    .controls {
+        width: 100%;
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn {
+        /* Make buttons stretch to fill the width evenly so they are easy to tap */
+        flex: 1; 
+        text-align: center;
+        padding: 12px;
+    }
+
+    .tiling-container {
+        /* Reduce padding around the board edge */
+        padding: 15px; 
+        justify-content: center; /* Center the sticky notes */
+    }
+
+    .note {
+        /* Make sticky notes fill the phone screen width */
+        width: 100%; 
+        min-height: 200px;
+    }
+}
