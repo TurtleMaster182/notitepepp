@@ -15,39 +15,35 @@ const firebaseConfig = {
   appId: "1:369261230180:web:1ca3366b2d62c4e8578771",
   measurementId: "G-16S87HQR8Q"
 };
-
-// Initialize Firebase
+// Initialize the Database
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const db = getDatabase(app);
 
 // ==========================================
 // 1. HUB PAGE LOGIC (index.html)
 // ==========================================
 if (document.getElementById('board-grid')) {
-    
-    let boards = JSON.parse(localStorage.getItem('whiteboard_list')) || [
-        { id: 'Brainstorming', name: 'Brainstorming' },
-        { id: 'To-Do', name: 'To-Do List' }
-    ];
+    const boardsRef = ref(db, 'whiteboard_list');
 
-    function saveBoards() {
-        localStorage.setItem('whiteboard_list', JSON.stringify(boards));
-    }
+    // Auto-sync boards across all users
+    onValue(boardsRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        const boards = Object.values(data);
+        renderBoards(boards);
+    });
 
-    function renderBoards() {
+    function renderBoards(boards) {
         const grid = document.getElementById('board-grid');
-        grid.innerHTML = ''; // Clear grid
+        grid.innerHTML = ''; 
 
         boards.forEach(board => {
             const container = document.createElement('div');
             container.className = 'board-box-container';
 
             const link = document.createElement('a');
-            link.href = `board.html?id=${board.id}`;
+            link.href = `board.html?id=${board.id}&name=${encodeURIComponent(board.name)}`;
             link.className = 'board-box';
             link.innerHTML = `<h2>${board.name}</h2>`;
-
-            // No delete button generated here anymore!
 
             container.appendChild(link);
             grid.appendChild(container);
@@ -58,74 +54,67 @@ if (document.getElementById('board-grid')) {
         const boardName = prompt("Enter a name for your new whiteboard:");
         if (boardName && boardName.trim() !== "") {
             const uniqueId = 'board_' + Date.now();
-            boards.push({ id: uniqueId, name: boardName.trim() });
-            saveBoards();
-            renderBoards();
+            set(ref(db, 'whiteboard_list/' + uniqueId), {
+                id: uniqueId,
+                name: boardName.trim()
+            });
         }
     });
-
-    renderBoards();
 }
 
-// ... Keep your existing WHITEBOARD LOGIC (board.html) below this ...
 // ==========================================
 // 2. WHITEBOARD LOGIC (board.html)
 // ==========================================
 if (document.getElementById('board-container')) {
-    
-    // Get the board ID from the URL
     const urlParams = new URLSearchParams(window.location.search);
-    let boardId = urlParams.get('id');
+    const boardId = urlParams.get('id');
+    const boardName = urlParams.get('name') || "Whiteboard";
     
-    // If someone tries to open board.html without an ID, send them back to the hub
-    if (!boardId) {
-        window.location.href = 'index.html';
-    }
+    if (!boardId) window.location.href = 'index.html';
 
-    // Attempt to find the board's friendly name to display in the title
-    const boardsList = JSON.parse(localStorage.getItem('whiteboard_list')) || [];
-    const currentBoard = boardsList.find(b => b.id === boardId);
-    const boardName = currentBoard ? currentBoard.name : decodeURIComponent(boardId);
-    
-    document.getElementById('board-title').innerText = boardName;
+    document.getElementById('board-title').innerText = decodeURIComponent(boardName);
 
-    // Storage key for this specific board's notes
-    const storageKey = 'whiteboard_data_' + boardId;
-    let notes = JSON.parse(localStorage.getItem(storageKey)) || [];
+    const notesRef = ref(db, 'whiteboard_data/' + boardId);
 
-    function saveNotes() {
-        localStorage.setItem(storageKey, JSON.stringify(notes));
-    }
+    // Auto-sync notes across all users in real-time
+    onValue(notesRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        renderNotes(data);
+    });
 
-    function renderNotes() {
+    function renderNotes(notesObject) {
         const container = document.getElementById('board-container');
         container.innerHTML = ''; 
 
-        notes.forEach(note => {
+        for (const noteId in notesObject) {
+            const note = notesObject[noteId];
+            
             const noteEl = document.createElement('div');
             noteEl.className = 'note' + (note.type === 'image' ? ' image-note' : '');
             
+            // Delete Button
             const delBtn = document.createElement('button');
             delBtn.className = 'delete-btn';
             delBtn.innerText = '✕';
             delBtn.onclick = () => {
-                notes = notes.filter(n => n.id !== note.id); 
-                saveNotes();
-                renderNotes(); 
+                remove(ref(db, `whiteboard_data/${boardId}/${noteId}`));
             };
             noteEl.appendChild(delBtn);
 
+            // Text Notes
             if (note.type === 'text') {
                 const textarea = document.createElement('textarea');
                 textarea.value = note.content;
                 textarea.placeholder = "Write something here...";
                 
                 textarea.oninput = (e) => {
-                    note.content = e.target.value;
-                    saveNotes();
+                    update(ref(db, `whiteboard_data/${boardId}/${noteId}`), {
+                        content: e.target.value
+                    });
                 };
                 noteEl.appendChild(textarea);
             } 
+            // Image Notes
             else if (note.type === 'image') {
                 const img = document.createElement('img');
                 img.src = note.content;
@@ -133,32 +122,34 @@ if (document.getElementById('board-container')) {
             }
             
             container.appendChild(noteEl);
-        });
+        }
     }
 
+    // Add empty text note
     document.getElementById('add-text-btn').addEventListener('click', () => {
-        notes.push({ id: Date.now(), type: 'text', content: '' });
-        saveNotes();
-        renderNotes();
+        const noteId = 'note_' + Date.now();
+        set(ref(db, `whiteboard_data/${boardId}/${noteId}`), { 
+            id: noteId, 
+            type: 'text', 
+            content: '' 
+        });
     });
 
+    // Add photo note
     document.getElementById('add-photo-input').addEventListener('change', function(e) {
         const file = this.files[0];
         if (file) {
             const reader = new FileReader();
             reader.onload = function(event) {
-                notes.push({ 
-                    id: Date.now(), 
+                const noteId = 'note_' + Date.now();
+                set(ref(db, `whiteboard_data/${boardId}/${noteId}`), { 
+                    id: noteId, 
                     type: 'image', 
                     content: event.target.result 
                 });
-                saveNotes();
-                renderNotes();
             };
             reader.readAsDataURL(file);
         }
         this.value = ''; 
     });
-
-    renderNotes();
 }
